@@ -171,7 +171,7 @@ server.registerTool(
   "write_input",
   {
     description:
-      "Send text input to a specific iTerm2 session. By default presses Enter after the text.",
+      "Send text input to a specific iTerm2 session. By default presses Enter after the text. When sending to a Claude Code session, set submit: true — this writes the text without a trailing newline, then sends a separate Enter keystroke to trigger submission (Claude Code buffers pasted text and needs a distinct Enter to submit).",
     inputSchema: z.object({
       session_id: z
         .string()
@@ -182,10 +182,42 @@ server.registerTool(
         .optional()
         .default(true)
         .describe("Press Enter after the text (default: true)"),
+      submit: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(
+          "Set true when sending to a Claude Code prompt. Writes the text without newline first, then sends a separate Enter to trigger submission."
+        ),
     }),
   },
-  async ({ session_id, text, newline }) => {
+  async ({ session_id, text, newline, submit }) => {
     try {
+      if (submit) {
+        // Two-step: paste text without newline, then send a bare Enter to submit
+        const pasteResult = await osascript(writeInputAS(session_id, text, false));
+        if (pasteResult === "SESSION_NOT_FOUND") {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Session ${session_id} not found.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        await osascript(writeInputAS(session_id, "", true));
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Sent to ${session_id} [submitted]: ${text}`,
+            },
+          ],
+        };
+      }
+
       const raw = await osascript(writeInputAS(session_id, text, newline));
       if (raw === "SESSION_NOT_FOUND") {
         return {
