@@ -57,6 +57,28 @@ export async function getCwd(tty: string): Promise<string | null> {
   }
 }
 
+/**
+ * Get the foreground process name for a TTY via ps.
+ */
+export async function getForegroundProcess(tty: string): Promise<string | null> {
+  try {
+    // Strip /dev/ prefix for ps matching
+    const ttyShort = tty.replace(/^\/dev\//, "");
+    const out = await run("ps", ["-t", ttyShort, "-o", "stat=,comm=", "-r"]);
+    // Find the process with "+" in stat (foreground process group)
+    const lines = out.trim().split("\n").filter(Boolean);
+    for (const line of lines) {
+      const match = line.match(/^\s*\S*\+\S*\s+(.+)/);
+      if (match) return match[1].trim();
+    }
+    // Fallback: return first process
+    const first = lines[0]?.match(/^\s*\S+\s+(.+)/);
+    return first ? first[1].trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 // --- AppleScript template builders ---
 
 export function listSessionsAS(): string {

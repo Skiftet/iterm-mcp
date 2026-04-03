@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   osascript,
   getCwd,
+  getForegroundProcess,
   listSessionsAS,
   readOutputAS,
   writeInputAS,
@@ -105,6 +106,148 @@ server.registerTool(
       }
 
       return { content: [{ type: "text" as const, text: output.trimEnd() }] };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        content: [{ type: "text" as const, text: `Error: ${msg}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- check_activity ---
+
+interface ActivityInfo {
+  sessionId: string;
+  name: string;
+  cwd: string | null;
+  tty: string;
+  foregroundProcess: string | null;
+  lastLines: string[];
+  idle: boolean;
+  windowId: string;
+  tabIndex: string;
+}
+
+server.registerTool(
+  "check_activity",
+  {
+    description:
+      "Scan all iTerm2 sessions and report which are active vs idle. Returns each session's foreground process, last few lines of output, and an idle/active assessment. Use this to discover which sessions are worth watching or placing in a layout grid.",
+    inputSchema: z.object({
+      tail_lines: z
+        .number()
+        .optional()
+        .default(5)
+        .describe(
+          "Number of trailing output lines to include per session (default: 5)"
+        ),
+    }),
+  },
+  async ({ tail_lines }) => {
+    try {
+      const raw = await osascript(listSessionsAS());
+      const lines = raw.trim().split("\n").filter(Boolean);
+
+      if (lines.length === 0) {
+        return {
+          content: [
+            { type: "text" as const, text: "No iTerm2 sessions found." },
+          ],
+        };
+      }
+
+      const sessions = lines.map((line) => {
+        const parts = line.split("|||");
+        return {
+          windowId: parts[0],
+          windowName: parts[1],
+          tabIndex: parts[2],
+          paneIndex: parts[3],
+          sessionId: parts[4],
+          name: parts[5],
+          tty: parts[6],
+        };
+      });
+
+      // Gather activity info in parallel
+      const activities: ActivityInfo[] = await Promise.all(
+        sessions.map(async (s) => {
+          const [cwd, fgProc, output] = await Promise.all([
+            getCwd(s.tty),
+            getForegroundProcess(s.tty),
+            osascript(readOutputAS(s.sessionId)).catch(() => ""),
+          ]);
+
+          const allLines = output.split("\n");
+          // Strip trailing empty lines
+          while (
+            allLines.length > 0 &&
+            allLines[allLines.length - 1].trim() === ""
+          ) {
+            allLines.pop();
+          }
+          const lastLines = allLines.slice(-tail_lines);
+
+          // Heuristic: idle if fg process is a shell and last line looks like a prompt
+          const shellNames = [
+            "-zsh",
+            "zsh",
+            "-bash",
+            "bash",
+            "fish",
+            "-fish",
+          ];
+          const isShell = fgProc
+            ? shellNames.some((sh) => fgProc.includes(sh))
+            : false;
+          const lastLine = lastLines[lastLines.length - 1] || "";
+          const looksLikePrompt =
+            lastLine.match(/[$%#>]\s*$/) !== null || lastLine.trim() === "";
+          const idle = isShell && looksLikePrompt;
+
+          return {
+            sessionId: s.sessionId,
+            name: s.name,
+            cwd,
+            tty: s.tty,
+            foregroundProcess: fgProc,
+            lastLines,
+            idle,
+            windowId: s.windowId,
+            tabIndex: s.tabIndex,
+          };
+        })
+      );
+
+      // Sort: active first, then by name
+      activities.sort((a, b) => {
+        if (a.idle !== b.idle) return a.idle ? 1 : -1;
+        return a.name.localeCompare(b.name);
+      });
+
+      // Format output
+      let output = `${activities.filter((a) => !a.idle).length} active, ${activities.filter((a) => a.idle).length} idle\n\n`;
+
+      for (const a of activities) {
+        const status = a.idle ? "IDLE" : "ACTIVE";
+        output += `[${status}] ${a.name}\n`;
+        output += `  Session: ${a.sessionId}\n`;
+        output += `  CWD: ${a.cwd || "unknown"}\n`;
+        output += `  Process: ${a.foregroundProcess || "unknown"}\n`;
+        if (a.lastLines.length > 0) {
+          output += `  Output:\n`;
+          for (const line of a.lastLines) {
+            output += `    ${line}\n`;
+          }
+        }
+        output += `\n`;
+      }
+
+      return {
+        content: [{ type: "text" as const, text: output.trimEnd() }],
+      };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       return {
