@@ -3,9 +3,9 @@ import { execFile } from "node:child_process";
 /**
  * Run a command with execFile (no shell — immune to shell injection).
  */
-export function run(cmd: string, args: string[]): Promise<string> {
+export function run(cmd: string, args: string[], maxBuffer = 10 * 1024 * 1024): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, { timeout: 15_000 }, (error, stdout, stderr) => {
+    execFile(cmd, args, { timeout: 15_000, maxBuffer }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(stderr.trim() || error.message));
       } else {
