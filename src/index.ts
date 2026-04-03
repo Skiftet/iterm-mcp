@@ -204,8 +204,16 @@ server.registerTool(
             : false;
           const lastLine = lastLines[lastLines.length - 1] || "";
           const looksLikePrompt =
-            lastLine.match(/[$%#>]\s*$/) !== null || lastLine.trim() === "";
-          const idle = isShell && looksLikePrompt;
+            lastLine.match(/[$%#>➜❯]\s*$/) !== null ||
+            lastLine.match(/[$%#>➜❯].*\s*$/) !== null ||
+            lastLine.trim() === "";
+          // Also detect Claude Code sessions waiting at prompt
+          const isClaudeIdle =
+            !isShell &&
+            (lastLine.includes("accept edits on") ||
+              lastLine.includes("new task?") ||
+              lastLine.includes("esc to interrupt"));
+          const idle = (isShell && looksLikePrompt) || isClaudeIdle;
 
           return {
             sessionId: s.sessionId,
