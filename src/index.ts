@@ -330,7 +330,7 @@ server.registerTool(
   "create_window",
   {
     description:
-      "Create a new iTerm2 window. Optionally specify a profile, working directory, and a command to run. Returns the session ID of the new window's session.",
+      "Create a new iTerm2 window. Prefer create_tab over this — new windows clutter the workspace. Only use create_window when the task genuinely needs a separate window. Returns the session ID of the new session.",
     inputSchema: z.object({
       profile: z
         .string()
@@ -379,7 +379,7 @@ server.registerTool(
   "create_tab",
   {
     description:
-      "Create a new tab in the same window as an existing session. Optionally specify a profile, working directory, and command. Returns the session ID of the new tab's session.",
+      "Create a new tab in the same window as an existing session. This is the preferred way to create new sessions — use this instead of create_window. Returns the session ID of the new tab's session.",
     inputSchema: z.object({
       session_id: z
         .string()
