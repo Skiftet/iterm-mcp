@@ -8,6 +8,9 @@ import {
   readOutputAS,
   writeInputAS,
   sendControlAS,
+  createWindowAS,
+  createTabAS,
+  splitPaneAS,
 } from "./applescript.js";
 
 const server = new McpServer({
@@ -308,6 +311,199 @@ server.registerTool(
           {
             type: "text" as const,
             text: `Sent ${character} to ${session_id}`,
+          },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        content: [{ type: "text" as const, text: `Error: ${msg}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- create_window ---
+
+server.registerTool(
+  "create_window",
+  {
+    description:
+      "Create a new iTerm2 window. Optionally specify a profile, working directory, and a command to run. Returns the session ID of the new window's session.",
+    inputSchema: z.object({
+      profile: z
+        .string()
+        .optional()
+        .describe(
+          "iTerm2 profile name to use (omit for default profile)"
+        ),
+      cwd: z
+        .string()
+        .optional()
+        .describe("Working directory to cd into after creation"),
+      command: z
+        .string()
+        .optional()
+        .describe("Command to execute in the new window"),
+    }),
+  },
+  async ({ profile, cwd, command }) => {
+    try {
+      const sessionId = (
+        await osascript(
+          createWindowAS(profile ?? null, command ?? null, cwd ?? null)
+        )
+      ).trim();
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Created new window. Session ID: ${sessionId}`,
+          },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        content: [{ type: "text" as const, text: `Error: ${msg}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- create_tab ---
+
+server.registerTool(
+  "create_tab",
+  {
+    description:
+      "Create a new tab in the same window as an existing session. Optionally specify a profile, working directory, and command. Returns the session ID of the new tab's session.",
+    inputSchema: z.object({
+      session_id: z
+        .string()
+        .describe(
+          "Session ID of any session in the target window (UUID from list_sessions)"
+        ),
+      profile: z
+        .string()
+        .optional()
+        .describe("iTerm2 profile name to use (omit for default profile)"),
+      cwd: z
+        .string()
+        .optional()
+        .describe("Working directory to cd into after creation"),
+      command: z
+        .string()
+        .optional()
+        .describe("Command to execute in the new tab"),
+    }),
+  },
+  async ({ session_id, profile, cwd, command }) => {
+    try {
+      const raw = (
+        await osascript(
+          createTabAS(
+            session_id,
+            profile ?? null,
+            command ?? null,
+            cwd ?? null
+          )
+        )
+      ).trim();
+      if (raw === "SESSION_NOT_FOUND") {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Session ${session_id} not found.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Created new tab. Session ID: ${raw}`,
+          },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        content: [{ type: "text" as const, text: `Error: ${msg}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// --- split_pane ---
+
+server.registerTool(
+  "split_pane",
+  {
+    description:
+      "Split an existing session's pane vertically or horizontally, creating a new pane. Returns the session ID of the new pane.",
+    inputSchema: z.object({
+      session_id: z
+        .string()
+        .describe(
+          "Session ID of the pane to split (UUID from list_sessions)"
+        ),
+      vertical: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe(
+          "Split direction: true for vertical (side by side), false for horizontal (top/bottom). Default: true."
+        ),
+      profile: z
+        .string()
+        .optional()
+        .describe("iTerm2 profile name to use (omit for default profile)"),
+      cwd: z
+        .string()
+        .optional()
+        .describe("Working directory to cd into after creation"),
+      command: z
+        .string()
+        .optional()
+        .describe("Command to execute in the new pane"),
+    }),
+  },
+  async ({ session_id, vertical, profile, cwd, command }) => {
+    try {
+      const raw = (
+        await osascript(
+          splitPaneAS(
+            session_id,
+            vertical,
+            profile ?? null,
+            command ?? null,
+            cwd ?? null
+          )
+        )
+      ).trim();
+      if (raw === "SESSION_NOT_FOUND") {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Session ${session_id} not found.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Split pane ${vertical ? "vertically" : "horizontally"}. New session ID: ${raw}`,
           },
         ],
       };

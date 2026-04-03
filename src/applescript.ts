@@ -120,6 +120,121 @@ tell application "iTerm2"
 end tell`;
 }
 
+export function createWindowAS(
+  profile: string | null,
+  command: string | null,
+  cwd: string | null
+): string {
+  const profileClause = profile
+    ? `with profile "${escapeAS(profile)}"`
+    : `with default profile`;
+
+  let body = `
+tell application "iTerm2"
+  set newWindow to (create window ${profileClause})
+  tell current session of current tab of newWindow`;
+
+  if (cwd) {
+    body += `\n    write text "cd ${escapeAS(cwd)} && clear"`;
+  }
+  if (command) {
+    body += `\n    write text "${escapeAS(command)}"`;
+  }
+
+  body += `
+    set sid to unique ID
+  end tell
+  return sid
+end tell`;
+  return body;
+}
+
+export function createTabAS(
+  sessionId: string,
+  profile: string | null,
+  command: string | null,
+  cwd: string | null
+): string {
+  assertSessionId(sessionId);
+  const profileClause = profile
+    ? `with profile "${escapeAS(profile)}"`
+    : `with default profile`;
+
+  let body = `
+tell application "iTerm2"
+  repeat with w in windows
+    repeat with t in tabs of w
+      repeat with s in sessions of t
+        if unique ID of s is "${escapeAS(sessionId)}" then
+          tell w
+            set newTab to (create tab ${profileClause})
+            tell current session of newTab`;
+
+  if (cwd) {
+    body += `\n              write text "cd ${escapeAS(cwd)} && clear"`;
+  }
+  if (command) {
+    body += `\n              write text "${escapeAS(command)}"`;
+  }
+
+  body += `
+              set sid to unique ID
+            end tell
+          end tell
+          return sid
+        end if
+      end repeat
+    end repeat
+  end repeat
+  return "SESSION_NOT_FOUND"
+end tell`;
+  return body;
+}
+
+export function splitPaneAS(
+  sessionId: string,
+  vertical: boolean,
+  profile: string | null,
+  command: string | null,
+  cwd: string | null
+): string {
+  assertSessionId(sessionId);
+  const direction = vertical ? "vertically" : "horizontally";
+  const profileClause = profile
+    ? `with profile "${escapeAS(profile)}"`
+    : `with default profile`;
+
+  let body = `
+tell application "iTerm2"
+  repeat with w in windows
+    repeat with t in tabs of w
+      repeat with s in sessions of t
+        if unique ID of s is "${escapeAS(sessionId)}" then
+          tell s
+            set newSession to (split ${direction} ${profileClause})
+          end tell
+          tell newSession`;
+
+  if (cwd) {
+    body += `\n            write text "cd ${escapeAS(cwd)} && clear"`;
+  }
+  if (command) {
+    body += `\n            write text "${escapeAS(command)}"`;
+  }
+
+  body += `
+            set sid to unique ID
+          end tell
+          return sid
+        end if
+      end repeat
+    end repeat
+  end repeat
+  return "SESSION_NOT_FOUND"
+end tell`;
+  return body;
+}
+
 export function sendControlAS(sessionId: string, asciiCode: number): string {
   assertSessionId(sessionId);
   return `
