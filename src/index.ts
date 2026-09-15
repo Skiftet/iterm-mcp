@@ -325,7 +325,7 @@ server.registerTool(
   "write_input",
   {
     description:
-      "Send text input to a specific iTerm2 session. By default presses Enter after the text. When sending to a Claude Code session, set submit: true — this writes the text without a trailing newline, then sends a separate Enter keystroke to trigger submission (Claude Code buffers pasted text and needs a distinct Enter to submit).",
+      "PREFER SendMessage when the target is another Claude Code session. SendMessage delivers an addressed, queued message straight into that session's conversation; it does not depend on which pane has focus, does not race whatever the session is mid-way through, and is not silently swallowed if the session is busy. Reach for write_input only for terminal work SendMessage cannot do: driving a shell, REPL or TUI, answering an interactive prompt, or starting a program in a pane. Send text input to a specific iTerm2 session. By default presses Enter after the text. When sending to a Claude Code session anyway, set submit: true — this writes the text without a trailing newline, then sends a separate Enter keystroke to trigger submission (Claude Code buffers pasted text and needs a distinct Enter to submit).",
     inputSchema: z.object({
       session_id: z
         .string()
@@ -421,7 +421,7 @@ server.registerTool(
   "send_control",
   {
     description:
-      "Send a control character (e.g. ctrl-c to interrupt) to a specific iTerm2 session.",
+      "PREFER SendMessage when you want another Claude Code session to stop, change course, or do something else — interrupting it by keystroke races whatever it is doing and discards its in-flight work, where a message is delivered cleanly at its next turn. Reach for send_control for genuine terminal control: killing a runaway process, ending stdin, clearing a screen. Send a control character (e.g. ctrl-c to interrupt) to a specific iTerm2 session.",
     inputSchema: z.object({
       session_id: z
         .string()
